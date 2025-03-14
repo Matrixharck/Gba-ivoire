@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gba_ivoirian/home.dart';
-import 'package:gba_ivoirian/main.dart';
+import 'package:flutter/services.dart';
 
 class ProfilePage extends StatefulWidget {
   final User user;
@@ -85,27 +85,41 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
 
             Spacer(), // Cela pousse le bouton de déconnexion en bas
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LoginPage(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  // Couleur de fond du bouton
-                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 30),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Se déconnecter',
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
+             ElevatedButton(
+  onPressed: () async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Déconnexion'),
+        content: Text('Voulez-vous vraiment quitter l\'application ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // Non
+            child: Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true), // Oui
+            child: Text('Oui'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      SystemNavigator.pop(); // Ferme l'application si confirmé
+    }
+  },
+  style: ElevatedButton.styleFrom(
+    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 30),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+  ),
+  child: Text(
+    'Se déconnecter',
+    style: TextStyle(fontSize: 16),
+  ),
+),
           ],
         ),
       ),

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:gba_ivoirian/order.dart';
-import 'package:gba_ivoirian/user.dart';
+import 'package:gba_ivoirian/seach.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
+
 class YangoHome extends StatefulWidget {
+  const YangoHome({super.key});
+
   @override
   _YangoHomeState createState() => _YangoHomeState();
 }
@@ -14,42 +16,85 @@ class YangoHome extends StatefulWidget {
 class _YangoHomeState extends State<YangoHome> {
   String _selectedRide = "Standard";
   String _searchQuery = "";
-  LatLng _mapCenter = LatLng(48.8566, 2.3522); // Initial map center
+  LatLng? _mapCenter;
   LatLng? _currentLocation;
   LatLng? _destination;
   final MapController _mapController = MapController();
   bool _isSearching = false;
+  bool _isLoadingLocation = true;
+  bool _mapReady = false;
   double _ridePrice = 0.0;
+  final TextEditingController _searchController = TextEditingController();
 
-  // Tarifs par type de voiture
   final Map<String, double> _ridePrices = {
-    "Standard": 1.0,  // Prix de base
-    "Premium": 1.2,   // Premium à 20% plus cher
-    "VIP": 1.5,       // VIP à 50% plus cher
+    "Standard": 1.0,
+    "Premium": 1.2,
+    "VIP": 1.5,
   };
 
-  void _getCurrentLocation() async {
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+    });
+
     try {
-      LocationPermission permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.deniedForever) {
-        print("La permission est refusée de manière permanente.");
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Veuillez activer les services de localisation")),
+        );
+        _setFallbackLocation();
         return;
       }
+
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        print("La permission de localisation a été refusée.");
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Permission de localisation refusée")),
+          );
+          _setFallbackLocation();
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Permission refusée définitivement. Activez-la dans les paramètres")),
+        );
+        _setFallbackLocation();
         return;
       }
 
       Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
-        _mapCenter = _currentLocation!;
-        _mapController.move(_mapCenter, 10.0);
+        _mapCenter = _currentLocation;
+        if (_mapReady) {
+          _mapController.move(_mapCenter!, 13.0);
+        }
+        _isLoadingLocation = false;
       });
     } catch (e) {
       print("Erreur lors de l'obtention de la position : $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur de localisation : $e")),
+      );
+      _setFallbackLocation();
     }
+  }
+
+  void _setFallbackLocation() {
+    setState(() {
+      _mapCenter = LatLng(5.2119, -3.7388); // Grand-Bassam, Côte d'Ivoire
+      if (_mapReady) {
+        _mapController.move(_mapCenter!, 13.0);
+      }
+      _isLoadingLocation = false;
+    });
   }
 
   void _searchLocation() async {
@@ -64,7 +109,9 @@ class _YangoHomeState extends State<YangoHome> {
       if (locations.isNotEmpty) {
         setState(() {
           _destination = LatLng(locations[0].latitude, locations[0].longitude);
-          _mapController.move(_destination!, 20.0);
+          if (_mapReady) {
+            _mapController.move(_destination!, 20.0);
+          }
           _calculatePrice();
         });
       }
@@ -77,7 +124,6 @@ class _YangoHomeState extends State<YangoHome> {
     }
   }
 
-  // Calcul du prix basé sur la distance et le type de voiture
   void _calculatePrice() {
     if (_currentLocation != null && _destination != null) {
       double distance = Geolocator.distanceBetween(
@@ -85,9 +131,9 @@ class _YangoHomeState extends State<YangoHome> {
         _currentLocation!.longitude,
         _destination!.latitude,
         _destination!.longitude,
-      ) / 1000; // Distance en kilomètres
+      ) / 1000;
 
-      double basePrice = distance * 250; // Prix de base par km (198)
+      double basePrice = distance * 198;
       double rideMultiplier = _ridePrices[_selectedRide] ?? 1.0;
 
       setState(() {
@@ -99,7 +145,17 @@ class _YangoHomeState extends State<YangoHome> {
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _getCurrentLocation();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -107,58 +163,75 @@ class _YangoHomeState extends State<YangoHome> {
     return Scaffold(
       body: Stack(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _mapCenter, // Changer 'center' par 'initialCenter'
-              initialZoom: 13.0,
-              onTap: (tapPosition, point) {
-                setState(() {
-                  _destination = point;
-                  _calculatePrice();
-                });
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate:
-                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: ['a', 'b', 'c'],
-              ),
-              // Affichage des marqueurs : position actuelle et destination
-              if (_currentLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _currentLocation!,
-                      width: 40,
-                      height: 40,
-                      child: Icon(
-                        Icons.location_pin,
-                        color: Colors.blue,
-                        size: 40,
-                      ),
+          _mapCenter == null || _isLoadingLocation
+              ? const Center(child: CircularProgressIndicator())
+              : FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _mapCenter!,
+                    initialZoom: 13.0,
+                    onMapReady: () {
+                      setState(() {
+                        _mapReady = true;
+                      });
+                      if (_mapCenter != null) {
+                        _mapController.move(_mapCenter!, 13.0);
+                      }
+                    },
+                    onTap: (tapPosition, point) {
+                      setState(() {
+                        _destination = point;
+                        _calculatePrice();
+                      });
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
                     ),
+                    if (_currentLocation != null && _destination != null)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: [_currentLocation!, _destination!],
+                            strokeWidth: 4.0,
+                            color: Colors.blue,
+                          ),
+                        ],
+                      ),
+                    if (_currentLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _currentLocation!,
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: Colors.blue,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (_destination != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _destination!,
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: Colors.red,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
-              if (_destination != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _destination!,
-                      width: 40,
-                      height: 40,
-                      child: Icon(
-                        Icons.location_pin,
-                        color: Colors.red,
-                        size: 40,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          // Barre de recherche avec icône de profil
           Positioned(
             top: 40,
             left: 10,
@@ -166,69 +239,54 @@ class _YangoHomeState extends State<YangoHome> {
             child: Row(
               children: [
                 IconButton(
-                  icon:
-                      Icon(Icons.account_circle, size: 36, color: Colors.black),
+                  icon: const Icon(Icons.account_circle, size: 36, color: Colors.black),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProfilePage(
-                          user: User(
-                            name: 'Kodjo',
-                            email: 'kodjoandre56@example.com',
-                            bio: 'KONAN OUMAR \nKOUAKOU\nTRAORE HUSSENI\n test pour GBA-IVOIRE',
-                          ),
-                        ),
-                      ),
-                    );
+                    // Navigation vers la page de profil si nécessaire
                   },
                 ),
                 Expanded(
                   child: TextField(
+                    controller: _searchController,
                     onChanged: (value) => setState(() => _searchQuery = value),
+                    onSubmitted: (value) => _searchLocation(),
                     decoration: InputDecoration(
                       hintText: "Où allez-vous ?",
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
                       suffixIcon: _isSearching
-                          ? CircularProgressIndicator()
+                          ? const CircularProgressIndicator()
                           : IconButton(
-                              icon: Icon(Icons.search, color: Colors.black),
+                              icon: const Icon(Icons.search, color: Colors.black),
                               onPressed: _searchLocation,
                             ),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          // Bouton pour obtenir la position actuelle
           Positioned(
             bottom: 180,
             left: 20,
             child: FloatingActionButton(
               onPressed: _getCurrentLocation,
               backgroundColor: Colors.green,
-              child: Icon(Icons.my_location, color: Colors.white),
+              child: const Icon(Icons.my_location, color: Colors.white),
             ),
           ),
-          // Options de course
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [
-                  BoxShadow(
-                      color: Colors.black26, blurRadius: 10, spreadRadius: 2)
+                  BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2)
                 ],
               ),
               child: Column(
@@ -242,31 +300,38 @@ class _YangoHomeState extends State<YangoHome> {
                       _buildRideOption(Icons.airport_shuttle, "VIP"),
                     ],
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text(
                     "Prix estimé : ${_ridePrice.toStringAsFixed(2)} FCFA",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: _destination != null
                         ? () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (context) => TripScreen()),
+                                builder: (context) => LoadingPage(
+                                  price: _ridePrice,
+                                  destination: _searchQuery.isNotEmpty
+                                      ? _searchQuery
+                                      : "Destination inconnue",
+                                  destinationAddress: _searchQuery.isNotEmpty
+                                      ? _searchQuery
+                                      : "Adresse non spécifiée",
+                                ),
+                              ),
                             );
                           }
                         : null,
                     style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
-                      padding: EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       backgroundColor: Colors.blue,
                     ),
-                    child: Center(
-                      child: Text("Commander une course",
-                          style: TextStyle(fontSize: 18)),
+                    child: const Center(
+                      child: Text("Commander une course", style: TextStyle(fontSize: 18)),
                     ),
                   ),
                 ],
@@ -284,7 +349,7 @@ class _YangoHomeState extends State<YangoHome> {
       onTap: () {
         setState(() {
           _selectedRide = label;
-          _calculatePrice(); // Recalculer le prix lorsque le type de voiture est changé
+          _calculatePrice();
         });
       },
       child: Column(
@@ -293,9 +358,8 @@ class _YangoHomeState extends State<YangoHome> {
             backgroundColor: isSelected ? Colors.blue : Colors.grey[300],
             child: Icon(icon, color: isSelected ? Colors.white : Colors.black),
           ),
-          SizedBox(height: 5),
-          Text(label,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         ],
       ),
     );

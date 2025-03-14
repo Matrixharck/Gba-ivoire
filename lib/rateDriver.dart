@@ -112,10 +112,7 @@ class ReviewSubmittedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Avis soumis"),
-        backgroundColor: const Color.fromARGB(255, 192, 255, 109),
-      ),
+     
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
