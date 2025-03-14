@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:gba_ivoirian/login.dart';
+import 'package:gba_ivoirian/profile.dart';
 import 'package:gba_ivoirian/seach.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-
 
 class YangoHome extends StatefulWidget {
   const YangoHome({super.key});
@@ -25,6 +26,7 @@ class _YangoHomeState extends State<YangoHome> {
   bool _mapReady = false;
   double _ridePrice = 0.0;
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // Added for Drawer
 
   final Map<String, double> _ridePrices = {
     "Standard": 1.0,
@@ -161,6 +163,68 @@ class _YangoHomeState extends State<YangoHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey, // Added scaffold key
+      drawer: Drawer( // Added Drawer widget
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 35,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 40, color: Colors.blue),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    "Emmanuella",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                  Text(
+                    "Emmanuella@gmail.com",
+                    style: TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text("Historique des courses"),
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => histo()),
+                  );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text("Paramètres"),
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => para ()),
+                  );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text("Déconnexion"),
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginPage ()),
+                  );
+              },
+            ),
+          ],
+        ),
+      ),
       body: Stack(
         children: [
           _mapCenter == null || _isLoadingLocation
@@ -241,7 +305,7 @@ class _YangoHomeState extends State<YangoHome> {
                 IconButton(
                   icon: const Icon(Icons.account_circle, size: 36, color: Colors.black),
                   onPressed: () {
-                    // Navigation vers la page de profil si nécessaire
+                    _scaffoldKey.currentState?.openDrawer(); // Open the drawer
                   },
                 ),
                 Expanded(

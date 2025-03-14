@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gba_ivoirian/cancelTrip.dart';
 import 'package:gba_ivoirian/chatdriver.dart';
 import 'package:gba_ivoirian/detaildriver.dart';
+import 'package:gba_ivoirian/home.dart';
 import 'package:gba_ivoirian/rateDriver.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -44,9 +45,7 @@ class _TripScreenState extends State<TripScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _cancelTrip() {
-    Navigator.pop(context);
-  }
+  
 
   void _changePaymentMethod() {
     showDialog(
@@ -206,7 +205,7 @@ class _TripScreenState extends State<TripScreen> with SingleTickerProviderStateM
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 elevation: 2,
                               ),
-                              onPressed: _cancelTrip,
+                              onPressed: () =>Navigator.push(context, MaterialPageRoute(builder: (_) => YangoHome())) ,
                               child: const Text("Annuler", style: TextStyle(fontSize: 16)),
                             ),
                           ],
